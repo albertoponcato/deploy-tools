@@ -56,15 +56,18 @@ internal class Program
 
             if (file.EndsWith("index.html"))
             {
-                var nodes = htmlDoc.DocumentNode
-                    .SelectNodes("//a")
+                var nodes = htmlDoc.DocumentNode?
+                    .SelectNodes("//a")?
                     .Where(a => a.GetAttributeValue("href", string.Empty).StartsWith('/') && a.GetAttributeValue("href", string.Empty).EndsWith(".html"));
 
-                foreach (var node in nodes)
+                if (nodes?.Any() == true)
                 {
-                    var attributeValue = node.GetAttributeValue("href", string.Empty);
-                    attributeValue = attributeValue.Substring(1);
-                    node.SetAttributeValue("href", attributeValue);
+                    foreach (var node in nodes)
+                    {
+                        var attributeValue = node.GetAttributeValue("href", string.Empty);
+                        attributeValue = attributeValue.Substring(1);
+                        node.SetAttributeValue("href", attributeValue);
+                    }
                 }
             }
 
