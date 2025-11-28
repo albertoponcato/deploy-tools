@@ -1,6 +1,7 @@
-﻿using Cocona;
-using HtmlAgilityPack;
+﻿using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Cocona;
+using HtmlAgilityPack;
 
 internal class Program
 {
@@ -16,7 +17,40 @@ internal class Program
             .AddCommand("sanitize", () => SanitizeTemplate())
             .WithDescription("This command will prepare templates for publication in staging");
 
+        app
+            .AddCommand("days", () => CopyDaysSince20000101())
+            .WithDescription("Copy to clipboard the number of days since 2000-01-01");
+
         app.Run();
+    }
+
+    private static void CopyDaysSince20000101()
+    {
+        var baseDate = new DateTime(2000, 1, 1);
+        var today = DateTime.Today;
+        var days = (today - baseDate).Days;
+
+        try
+        {
+            var psi = new ProcessStartInfo("clip")
+            {
+                RedirectStandardInput = true,
+                UseShellExecute = false
+            };
+
+            using var p = Process.Start(psi);
+            if (p != null)
+            {
+                using var sw = p.StandardInput;
+                sw.Write(days.ToString());
+            }
+
+            Console.WriteLine($"{days} copied to clipboard.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to copy to clipboard. Value: {days}. Error: {ex.Message}");
+        }
     }
 
     private static void SanitizeTemplate()
@@ -58,7 +92,8 @@ internal class Program
             {
                 var nodes = htmlDoc.DocumentNode?
                     .SelectNodes("//a")?
-                    .Where(a => a.GetAttributeValue("href", string.Empty).StartsWith('/') && a.GetAttributeValue("href", string.Empty).EndsWith(".html"));
+                    .Where(a => a.GetAttributeValue("href", string.Empty).StartsWith('/') && a.GetAttributeValue("href", string.Empty).EndsWith(".html"))
+                    .ToList();
 
                 if (nodes?.Any() == true)
                 {
