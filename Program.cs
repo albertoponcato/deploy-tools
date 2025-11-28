@@ -19,7 +19,7 @@ internal class Program
 
         app
             .AddCommand("days", () => CopyDaysSince20000101())
-            .WithDescription("Copy to clipboard the number of days since 2000-01-01");
+            .WithDescription("This command will copy the number of days since 2000-01-01 to the clipboard");
 
         app.Run();
     }
