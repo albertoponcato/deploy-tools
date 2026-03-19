@@ -21,6 +21,10 @@ internal class Program
             .AddCommand("days", () => CopyDaysSince20000101())
             .WithDescription("This command will copy the number of days since 2000-01-01 to the clipboard");
 
+        app
+            .AddCommand("clean-config", () => DeleteConfigFiles())
+            .WithDescription("This command will delete all web.config and appsettings.json / appsettings.*.json files");
+
         app.Run();
     }
 
@@ -111,6 +115,69 @@ internal class Program
         }
 
         Console.WriteLine(path);
+        Console.WriteLine("Operation completed");
+    }
+
+    private static void DeleteConfigFiles()
+    {
+        var path = Environment.CurrentDirectory;
+
+        Console.WriteLine();
+        Console.WriteLine("This command will delete all web.config and appsettings.json / appsettings.*.json files");
+
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            Console.WriteLine($"Problem with the path to process \"{path}\"");
+            return;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Folder \"{path}\" located.");
+        Console.WriteLine();
+
+        var files = Directory
+            .EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
+            .Where(f =>
+            {
+                var name = Path.GetFileName(f);
+                return name.Equals("web.config", StringComparison.InvariantCultureIgnoreCase)
+                    || name.Equals("appsettings.json", StringComparison.InvariantCultureIgnoreCase)
+                    || (name.StartsWith("appsettings.", StringComparison.InvariantCultureIgnoreCase) && name.EndsWith(".json", StringComparison.InvariantCultureIgnoreCase));
+            })
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            Console.WriteLine("No files found. Operation completed.");
+            return;
+        }
+
+        Console.WriteLine($"The following {files.Count} file(s) will be deleted:");
+        Console.WriteLine();
+        foreach (var file in files)
+        {
+            Console.WriteLine($"  {Path.GetFileName(file)}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Do you want to proceed? Press [Y(yes)] to confirm, or any other key to abort.");
+
+        var confirm = Console.ReadLine();
+
+        if (string.IsNullOrWhiteSpace(confirm) || !confirm.Equals("Y", StringComparison.InvariantCultureIgnoreCase))
+        {
+            Console.WriteLine("Operation aborted by the user.");
+            return;
+        }
+
+        Console.WriteLine();
+
+        foreach (var file in files)
+        {
+            File.Delete(file);
+            Console.WriteLine($"File \"{file}\" deleted");
+        }
+
         Console.WriteLine("Operation completed");
     }
 
