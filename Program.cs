@@ -3,6 +3,13 @@ using System.Text.RegularExpressions;
 using Cocona;
 using HtmlAgilityPack;
 
+internal enum SitePlatform
+{
+    Kentico,
+    Umbraco,
+    Other
+}
+
 internal class Program
 {
     private static void Main(string[] args)
@@ -137,13 +144,7 @@ internal class Program
 
         var files = Directory
             .EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
-            .Where(f =>
-            {
-                var name = Path.GetFileName(f);
-                return name.Equals("web.config", StringComparison.InvariantCultureIgnoreCase)
-                    || name.Equals("appsettings.json", StringComparison.InvariantCultureIgnoreCase)
-                    || (name.StartsWith("appsettings.", StringComparison.InvariantCultureIgnoreCase) && name.EndsWith(".json", StringComparison.InvariantCultureIgnoreCase));
-            })
+            .Where(f => IsExcludedFile(Path.GetFileName(f)))
             .ToList();
 
         if (files.Count == 0)
@@ -183,13 +184,29 @@ internal class Program
 
     private static void PrePublishCleaning()
     {
-        string[] excludesFile = ["appsettings.json", "web.config"];
-        string[] excludesDirectory = ["assets"];
-
         var path = Environment.CurrentDirectory;
 
+        SitePlatform platform = DetectPlatform(path);
+        string? excludeDirName = platform switch
+        {
+            SitePlatform.Kentico => "assets",
+            SitePlatform.Umbraco => "wwwroot",
+            _ => null
+        };
+
+        (string DirName, string KeepName)[] prunedDirs = platform == SitePlatform.Umbraco
+            ? [("wwwroot", "media"), ("umbraco", "Licenses")]
+            : [];
+
         Console.WriteLine();
-        Console.WriteLine($"This command will delete all files except [{string.Join(", ", excludesFile)}] and all folders except [{string.Join(", ", excludesDirectory)}]");
+        Console.Write("Detected platform: ");
+        WriteLinePlatform(platform);
+        string folderClause = excludeDirName is null ? "all folders" : $"all folders except \"{excludeDirName}\"";
+        Console.WriteLine($"This command will delete all files except \"web.config\" and any \"appsettings*.json\" file, and {folderClause}");
+        foreach ((string dirName, string keepName) in prunedDirs)
+        {
+            Console.WriteLine($"Inside \"{dirName}\", all folders except \"{keepName}\" will be deleted, if present.");
+        }
 
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
         {
@@ -213,30 +230,29 @@ internal class Program
         Console.WriteLine();
 
         DirectoryInfo directory = new(path);
+        FileInfo[] topFiles = directory.GetFiles();
 
-        foreach (string excludeFile in excludesFile)
+        if (!topFiles.Any(f => f.Name.Equals("web.config", StringComparison.InvariantCultureIgnoreCase)))
         {
-            FileInfo fileToExclude = new(Path.Combine(path, excludeFile));
-            if (!fileToExclude.Exists)
-            {
-                Console.WriteLine($"File to exclude \"{excludeFile}\" does not exist. Operation aborted.");
-                return;
-            }
+            Console.WriteLine("File to exclude \"web.config\" does not exist. Operation aborted.");
+            return;
         }
 
-        foreach (string excludeDir in excludesDirectory)
+        if (!topFiles.Any(f => IsAppSettingsFileName(f.Name)))
         {
-            DirectoryInfo dirToExclude = new(Path.Combine(path, excludeDir));
-            if (!dirToExclude.Exists)
-            {
-                Console.WriteLine($"Directory to exclude \"{excludeDir}\" does not exist. Operation aborted.");
-                return;
-            }
+            Console.WriteLine("No \"appsettings*.json\" file to exclude found. Operation aborted.");
+            return;
         }
 
-        foreach (FileInfo file in directory.GetFiles())
+        if (excludeDirName is not null && !Directory.Exists(Path.Combine(path, excludeDirName)))
         {
-            if (!excludesFile.Contains(file.Name, StringComparer.InvariantCultureIgnoreCase))
+            Console.WriteLine($"Directory to exclude \"{excludeDirName}\" does not exist. Operation aborted.");
+            return;
+        }
+
+        foreach (FileInfo file in topFiles)
+        {
+            if (!IsExcludedFile(file.Name))
             {
                 file.Delete();
                 Console.WriteLine($"File \"{file.Name}\" deleted");
@@ -245,13 +261,79 @@ internal class Program
 
         foreach (DirectoryInfo dir in directory.GetDirectories())
         {
-            if (!excludesDirectory.Contains(dir.Name, StringComparer.InvariantCultureIgnoreCase))
+            string? keepName = prunedDirs.FirstOrDefault(p => p.DirName.Equals(dir.Name, StringComparison.InvariantCultureIgnoreCase)).KeepName;
+            if (keepName is not null)
             {
-                dir.Delete(true);
-                Console.WriteLine($"Directory \"{dir.Name}\" deleted");
+                DeleteAllExcept(dir, keepName);
+                continue;
             }
+
+            if (dir.Name.Equals(excludeDirName, StringComparison.InvariantCultureIgnoreCase))
+            {
+                continue;
+            }
+
+            dir.Delete(true);
+            Console.WriteLine($"Directory \"{dir.Name}\" deleted");
         }
 
         Console.WriteLine("Operation completed");
+    }
+
+    private static bool IsAppSettingsFileName(string name) =>
+        name.Equals("appsettings.json", StringComparison.InvariantCultureIgnoreCase)
+        || (name.StartsWith("appsettings.", StringComparison.InvariantCultureIgnoreCase) && name.EndsWith(".json", StringComparison.InvariantCultureIgnoreCase));
+
+    private static bool IsExcludedFile(string name) =>
+        name.Equals("web.config", StringComparison.InvariantCultureIgnoreCase) || IsAppSettingsFileName(name);
+
+    private static void DeleteAllExcept(DirectoryInfo dir, string keepDirName)
+    {
+        foreach (FileInfo file in dir.GetFiles())
+        {
+            file.Delete();
+            Console.WriteLine($"File \"{file.Name}\" deleted");
+        }
+
+        foreach (DirectoryInfo subDir in dir.GetDirectories())
+        {
+            if (!subDir.Name.Equals(keepDirName, StringComparison.InvariantCultureIgnoreCase))
+            {
+                subDir.Delete(true);
+                Console.WriteLine($"Directory \"{subDir.Name}\" deleted");
+            }
+        }
+    }
+
+    private static void WriteLinePlatform(SitePlatform platform)
+    {
+        ConsoleColor color = platform switch
+        {
+            SitePlatform.Kentico => ConsoleColor.DarkYellow,
+            SitePlatform.Umbraco => ConsoleColor.Blue,
+            _ => Console.ForegroundColor
+        };
+
+        ConsoleColor originalColor = Console.ForegroundColor;
+        Console.ForegroundColor = color;
+        Console.WriteLine(platform);
+        Console.ForegroundColor = originalColor;
+    }
+
+    private static SitePlatform DetectPlatform(string path)
+    {
+        bool HasDll(string pattern) => Directory.EnumerateFiles(path, pattern, SearchOption.TopDirectoryOnly).Any();
+
+        if (HasDll("CMS.*.dll") || HasDll("Kentico.Xperience.*.dll") || Directory.Exists(Path.Combine(path, "assets")))
+        {
+            return SitePlatform.Kentico;
+        }
+
+        if (HasDll("Umbraco.Cms.*.dll") || Directory.Exists(Path.Combine(path, "umbraco")))
+        {
+            return SitePlatform.Umbraco;
+        }
+
+        return SitePlatform.Other;
     }
 }
