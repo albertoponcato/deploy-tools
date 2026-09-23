@@ -6,7 +6,20 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<AssemblyName>xtr</AssemblyName>
+		<PackAsTool>true</PackAsTool>
+		<ToolCommandName>xtr</ToolCommandName>
+		<PackageId>Exetera.DeployTools</PackageId>
+		<Title>Exetera.DeployTools</Title>
+		<Authors>Alberto Poncato</Authors>
+		<Description>A collection of CLI utilities to prep local web project folders for deployment/publishing (pre-publish cleaning, config stripping, template sanitizing).</Description>
+		<PackageTags>dotnet-tool;deploy;cli</PackageTags>
+		<Copyright>$([System.DateTime]::UtcNow.ToString(`yyyy`)) © Exetera</Copyright>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Cocona" Version="2.2.0" />
